@@ -7,6 +7,9 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using OpenCvSharp;
+using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.Graphics.Imaging;
+using Windows.Storage.Streams;
 
 namespace CopyHelper.Utilities
 {
@@ -94,6 +97,49 @@ namespace CopyHelper.Utilities
 
         [DllImport("gdi32.dll")]
         private static extern bool DeleteObject(IntPtr hObject);
+
+        public static SoftwareBitmap ToSoftwareBitmap(Mat mat)
+        {
+            if (mat.Empty())
+            {
+                throw new ArgumentException("Mat is empty.");
+            }
+
+            Mat bgra = mat;
+            if (mat.Type() != MatType.CV_8UC4)
+            {
+                bgra = new Mat();
+                if (mat.Channels() == 1)
+                {
+                    Cv2.CvtColor(mat, bgra, ColorConversionCodes.GRAY2BGRA);
+                }
+                else
+                {
+                    Cv2.CvtColor(mat, bgra, ColorConversionCodes.BGR2BGRA);
+                }
+            }
+
+            int width = bgra.Width;
+            int height = bgra.Height;
+            int stride = width * 4;
+            byte[] pixels = new byte[height * stride];
+            Marshal.Copy(bgra.Data, pixels, 0, pixels.Length);
+
+            IBuffer buffer = pixels.AsBuffer();
+            SoftwareBitmap bitmap = SoftwareBitmap.CreateCopyFromBuffer(
+                buffer,
+                BitmapPixelFormat.Bgra8,
+                width,
+                height,
+                BitmapAlphaMode.Ignore);
+
+            if (!ReferenceEquals(bgra, mat))
+            {
+                bgra.Dispose();
+            }
+
+            return bitmap;
+        }
 
         public static Bitmap ToBitmap(Mat mat)
         {

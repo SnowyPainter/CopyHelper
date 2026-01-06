@@ -32,9 +32,8 @@ namespace CopyHelper.ViewModels
 
         public MainViewModel()
         {
-            string tessdata = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tessdata");
             ImageSegmentationService segmentation = new ImageSegmentationService();
-            _ocrService = new OcrService(tessdata, "kor+eng");
+            _ocrService = new OcrService();
             _pipelineService = new ImagePipelineService(segmentation, _ocrService);
             _typingInjector = new TypingInjector();
             _keyboardHook = new KeyboardHook();
@@ -293,7 +292,6 @@ namespace CopyHelper.ViewModels
             _keyboardHook.Dispose();
             _mouseHook.LeftButtonDown -= OnLeftButtonDown;
             _mouseHook.Dispose();
-            _ocrService.Dispose();
         }
 
     }

@@ -1,45 +1,49 @@
 using System;
-using System.Drawing;
-using System.IO;
+using System.Globalization;
+using System.Threading.Tasks;
 using CopyHelper.Utilities;
 using OpenCvSharp;
-using Tesseract;
+using Windows.Globalization;
+using Windows.Media.Ocr;
 
 namespace CopyHelper.Services
 {
-    public sealed class OcrService : IDisposable
+    public sealed class OcrService
     {
-        private readonly object _sync = new object();
-        private readonly TesseractEngine _engine;
+        private readonly OcrEngine _engine;
 
-        public OcrService(string dataPath, string languages)
+        public OcrService()
         {
-            _engine = new TesseractEngine(dataPath, languages, EngineMode.Default);
-            _engine.DefaultPageSegMode = PageSegMode.Auto;
-            _engine.SetVariable("preserve_interword_spaces", "1");
+            _engine = TryCreateKoreanEngine() ?? OcrEngine.TryCreateFromUserProfileLanguages() ?? OcrEngine.TryCreateFromLanguage(new Language("en-US"))!;
         }
 
-        public string ReadText(Mat mat)
+        public async Task<string> ReadTextAsync(Mat mat)
         {
             if (mat.Empty())
             {
                 return string.Empty;
             }
 
-            using Bitmap bitmap = ImageConversion.ToBitmap(mat);
-            using MemoryStream stream = new MemoryStream();
-            bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
-            using Pix pix = Pix.LoadFromMemory(stream.ToArray());
-            lock (_sync)
-            {
-                using Page page = _engine.Process(pix);
-                return page.GetText() ?? string.Empty;
-            }
+            using var bitmap = ImageConversion.ToSoftwareBitmap(mat);
+            OcrResult result = await _engine.RecognizeAsync(bitmap);
+            return result.Text ?? string.Empty;
         }
 
-        public void Dispose()
+        private static OcrEngine? TryCreateKoreanEngine()
         {
-            _engine.Dispose();
+            Language? korean = null;
+            foreach (Language lang in OcrEngine.AvailableRecognizerLanguages)
+            {
+                if (lang.LanguageTag.StartsWith("ko", true, CultureInfo.InvariantCulture))
+                {
+                    korean = lang;
+                    break;
+                }
+            }
+
+            return korean != null && OcrEngine.IsLanguageSupported(korean)
+                ? OcrEngine.TryCreateFromLanguage(korean)
+                : null;
         }
     }
 }

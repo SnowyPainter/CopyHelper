@@ -23,7 +23,7 @@ namespace CopyHelper.Services
 
         public Task<ProcessedResult> ProcessAsync(BitmapSource source)
         {
-            return Task.Run(() =>
+            return Task.Run(async () =>
             {
                 using Mat mat = ImageConversion.ToMat(source);
                 IReadOnlyList<SegmentedRegion> regions = _segmentationService.Segment(mat);
@@ -31,7 +31,13 @@ namespace CopyHelper.Services
                 List<BitmapSource> photos = new List<BitmapSource>();
                 List<string> textParts = new List<string>();
 
-                foreach (SegmentedRegion region in regions)
+                List<SegmentedRegion> orderedTextRegions = regions
+                    .Where(r => r.Type == RegionType.Text)
+                    .OrderBy(r => r.Bounds.Y)
+                    .ThenBy(r => r.Bounds.X)
+                    .ToList();
+
+                foreach (SegmentedRegion region in regions.Where(r => r.Type == RegionType.Photo))
                 {
                     WpfRect padded = PadRegion(region.Bounds, source.PixelWidth, source.PixelHeight, 8);
                     using Mat cropped = new Mat(mat, ToRect(padded));
@@ -42,21 +48,24 @@ namespace CopyHelper.Services
                         photo.Freeze();
                         photos.Add(photo);
                     }
-                    else
+                }
+
+                foreach (SegmentedRegion region in orderedTextRegions)
+                {
+                    WpfRect padded = PadRegion(region.Bounds, source.PixelWidth, source.PixelHeight, 8);
+                    using Mat cropped = new Mat(mat, ToRect(padded));
+                    using Mat ocrReady = PreprocessForOcr(cropped);
+                    string text = await _ocrService.ReadTextAsync(ocrReady).ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(text))
                     {
-                        using Mat ocrReady = PreprocessForOcr(cropped);
-                        string text = _ocrService.ReadText(ocrReady);
-                        if (!string.IsNullOrWhiteSpace(text))
-                        {
-                            textParts.Add(text);
-                        }
+                        textParts.Add(text);
                     }
                 }
 
                 if (textParts.Count == 0)
                 {
                     using Mat ocrReady = PreprocessForOcr(mat);
-                    string text = _ocrService.ReadText(ocrReady);
+                    string text = await _ocrService.ReadTextAsync(ocrReady).ConfigureAwait(false);
                     if (!string.IsNullOrWhiteSpace(text))
                     {
                         textParts.Add(text);
@@ -80,20 +89,38 @@ namespace CopyHelper.Services
                 Cv2.CvtColor(source, gray, ColorConversionCodes.BGR2GRAY);
             }
 
-            Mat binary = new Mat();
-            Cv2.AdaptiveThreshold(
-                gray,
-                binary,
-                255,
-                AdaptiveThresholdTypes.GaussianC,
-                ThresholdTypes.Binary,
-                31,
-                5);
+            Mat resized = EnsureMinHeight(gray, 60);
+            if (!ReferenceEquals(resized, gray))
+            {
+                gray.Dispose();
+                gray = resized;
+            }
 
-            Mat kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(2, 2));
-            Cv2.MorphologyEx(binary, binary, MorphTypes.Open, kernel, iterations: 1);
-            Cv2.Dilate(binary, binary, kernel, iterations: 1);
-            return binary;
+            Mat normalized = new Mat();
+            Cv2.Normalize(gray, normalized, 0, 255, NormTypes.MinMax);
+
+            Mat blurred = new Mat();
+            Cv2.GaussianBlur(normalized, blurred, new Size(0, 0), 1.0);
+
+            Mat sharpened = new Mat();
+            Cv2.AddWeighted(normalized, 1.5, blurred, -0.5, 0, sharpened);
+
+            normalized.Dispose();
+            blurred.Dispose();
+            return sharpened;
+        }
+
+        private static Mat EnsureMinHeight(Mat source, int minHeight)
+        {
+            if (source.Height >= minHeight)
+            {
+                return source;
+            }
+
+            double scale = minHeight / (double)source.Height;
+            Mat resized = new Mat();
+            Cv2.Resize(source, resized, new Size(), scale, scale, InterpolationFlags.Cubic);
+            return resized;
         }
 
         private static WpfRect PadRegion(WpfRect region, int maxWidth, int maxHeight, int padding)
