@@ -5,10 +5,10 @@ using CopyHelper.Services;
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using WpfApplication = System.Windows.Application;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 
@@ -27,6 +27,9 @@ namespace CopyHelper.ViewModels
         private readonly IRelayCommand _clearCommand;
         private readonly IAsyncRelayCommand _startTypingCommand;
         private readonly IRelayCommand _stopTypingCommand;
+        private readonly IRelayCommand<BitmapSource> _copyPhotoCommand;
+        private readonly IRelayCommand<BitmapSource> _savePhotoCommand;
+        private readonly IRelayCommand _saveAllPhotosCommand;
         private CancellationTokenSource? _typingCts;
         private IntPtr _targetWindow = IntPtr.Zero;
 
@@ -42,6 +45,7 @@ namespace CopyHelper.ViewModels
             _mouseHook.LeftButtonDown += OnLeftButtonDown;
 
             Photos = new ObservableCollection<BitmapSource>();
+            Photos.CollectionChanged += (_, _) => _saveAllPhotosCommand.NotifyCanExecuteChanged();
             StatusText = "Ready.";
             TypingDelayMs = 20;
             CountdownSeconds = 3;
@@ -52,6 +56,9 @@ namespace CopyHelper.ViewModels
             _clearCommand = new RelayCommand(Clear);
             _startTypingCommand = new AsyncRelayCommand(StartTypingAsync, () => !IsBusy);
             _stopTypingCommand = new RelayCommand(StopTyping);
+            _copyPhotoCommand = new RelayCommand<BitmapSource>(CopyPhoto);
+            _savePhotoCommand = new RelayCommand<BitmapSource>(SavePhoto);
+            _saveAllPhotosCommand = new RelayCommand(SaveAllPhotos, () => Photos.Count > 0);
         }
 
         public ObservableCollection<BitmapSource> Photos { get; }
@@ -95,6 +102,9 @@ namespace CopyHelper.ViewModels
         public IRelayCommand ClearCommand => _clearCommand;
         public IAsyncRelayCommand StartTypingCommand => _startTypingCommand;
         public IRelayCommand StopTypingCommand => _stopTypingCommand;
+        public IRelayCommand<BitmapSource> CopyPhotoCommand => _copyPhotoCommand;
+        public IRelayCommand<BitmapSource> SavePhotoCommand => _savePhotoCommand;
+        public IRelayCommand SaveAllPhotosCommand => _saveAllPhotosCommand;
 
         public async Task LoadImageAsync(BitmapSource source)
         {
@@ -116,6 +126,7 @@ namespace CopyHelper.ViewModels
             OcrText = result.OcrText;
             StatusText = "Processing complete.";
             IsBusy = false;
+            _saveAllPhotosCommand.NotifyCanExecuteChanged();
         }
 
         partial void OnIsBusyChanged(bool value)
@@ -193,6 +204,7 @@ namespace CopyHelper.ViewModels
             OcrText = string.Empty;
             AnswerText = string.Empty;
             StatusText = "Cleared.";
+            _saveAllPhotosCommand.NotifyCanExecuteChanged();
         }
 
         private async Task StartTypingAsync()
@@ -237,6 +249,95 @@ namespace CopyHelper.ViewModels
             _typingCts = null;
         }
 
+        private void CopyPhoto(BitmapSource? photo)
+        {
+            if (photo == null)
+            {
+                return;
+            }
+
+            Clipboard.SetImage(photo);
+            StatusText = "Photo copied to clipboard.";
+        }
+
+        private void SavePhoto(BitmapSource? photo)
+        {
+            if (photo == null)
+            {
+                return;
+            }
+
+            Microsoft.Win32.SaveFileDialog dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "PNG Image|*.png|JPEG Image|*.jpg;*.jpeg|All Files|*.*",
+                FileName = "photo.png"
+            };
+
+            bool? result = dialog.ShowDialog();
+            if (result == true)
+            {
+                SaveBitmapSource(photo, dialog.FileName);
+                StatusText = "Photo saved.";
+            }
+        }
+
+        private void SaveAllPhotos()
+        {
+            if (Photos.Count == 0)
+            {
+                return;
+            }
+
+            Microsoft.Win32.OpenFileDialog dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                CheckFileExists = false,
+                CheckPathExists = true,
+                ValidateNames = false,
+                FileName = "Select Folder"
+            };
+
+            bool? result = dialog.ShowDialog();
+            if (result != true)
+            {
+                return;
+            }
+
+            string? folder = Path.GetDirectoryName(dialog.FileName);
+            if (string.IsNullOrWhiteSpace(folder))
+            {
+                return;
+            }
+
+            int index = 1;
+            foreach (BitmapSource photo in Photos)
+            {
+                string fileName = $"photo_{index:000}.png";
+                string path = Path.Combine(folder, fileName);
+                SaveBitmapSource(photo, path);
+                index++;
+            }
+
+            StatusText = $"Saved {Photos.Count} photos.";
+        }
+
+        private static void SaveBitmapSource(BitmapSource source, string filePath)
+        {
+            BitmapEncoder encoder = CreateEncoder(filePath);
+            encoder.Frames.Add(BitmapFrame.Create(source));
+            using FileStream stream = new FileStream(filePath, FileMode.Create, FileAccess.Write);
+            encoder.Save(stream);
+        }
+
+        private static BitmapEncoder CreateEncoder(string filePath)
+        {
+            string extension = Path.GetExtension(filePath).ToLowerInvariant();
+            return extension switch
+            {
+                ".jpg" or ".jpeg" => new JpegBitmapEncoder(),
+                _ => new PngBitmapEncoder()
+            };
+        }
+
         private void OnKeyPressed(object? sender, int keyCode)
         {
             if (keyCode == 0x1B)
@@ -273,7 +374,7 @@ namespace CopyHelper.ViewModels
 
         private static IntPtr GetMainWindowHandle()
         {
-            Window? window = Application.Current?.MainWindow;
+            Window? window = WpfApplication.Current?.MainWindow;
             if (window == null)
             {
                 return IntPtr.Zero;

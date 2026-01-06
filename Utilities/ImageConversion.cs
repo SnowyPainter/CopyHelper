@@ -57,6 +57,17 @@ namespace CopyHelper.Utilities
             int width = bgra.Width;
             int height = bgra.Height;
             int stride = width * 4;
+            if (!bgra.IsContinuous() || bgra.Step() != stride)
+            {
+                Mat contiguous = bgra.Clone();
+                if (!ReferenceEquals(bgra, mat))
+                {
+                    bgra.Dispose();
+                }
+
+                bgra = contiguous;
+            }
+
             byte[] pixels = new byte[height * stride];
             Marshal.Copy(bgra.Data, pixels, 0, pixels.Length);
 
@@ -122,6 +133,17 @@ namespace CopyHelper.Utilities
             int width = bgra.Width;
             int height = bgra.Height;
             int stride = width * 4;
+            if (!bgra.IsContinuous() || bgra.Step() != stride)
+            {
+                Mat contiguous = bgra.Clone();
+                if (!ReferenceEquals(bgra, mat))
+                {
+                    bgra.Dispose();
+                }
+
+                bgra = contiguous;
+            }
+
             byte[] pixels = new byte[height * stride];
             Marshal.Copy(bgra.Data, pixels, 0, pixels.Length);
 
