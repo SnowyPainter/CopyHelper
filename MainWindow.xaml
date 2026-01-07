@@ -143,7 +143,7 @@
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
                     <Button Content="-" Style="{StaticResource CaptionButtonStyle}" Click="MinimizeButton_Click"/>
-                    <Button Content="□" Style="{StaticResource CaptionButtonStyle}" Click="MaximizeButton_Click"/>
+                    <Button Content="[]" Style="{StaticResource CaptionButtonStyle}" Click="MaximizeButton_Click"/>
                     <Button Content="X" Style="{StaticResource CloseButtonStyle}" Click="CloseButton_Click"/>
                 </StackPanel>
             </Grid>
@@ -308,9 +308,9 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Detected Photos" FontWeight="SemiBold" Foreground="#2D3436" />
-                            <Button Grid.Column="1" Content="Save All"
-                                    Padding="10,4"
-                                    Command="{Binding SaveAllPhotosCommand}" />
+                            <Button Content="Save All"
+                                    Style="{StaticResource AppSmallButton}"
+                                    Command="{Binding SaveAllPhotosCommand}" Grid.ColumnSpan="2" Margin="373,0,0,0" />
                         </Grid>
                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                             <ItemsControl ItemsSource="{Binding Photos}">
@@ -370,12 +370,19 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="PDF Search Results" FontWeight="SemiBold" Foreground="#2D3436" />
+                            <TextBlock Text="Results" FontWeight="SemiBold" Foreground="#2D3436" />
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding IndexedPdfCount, StringFormat=Indexed {0}}"
                                            Foreground="#636E72" Margin="0,0,8,0"/>
-                                <Button Content="Ingest PDFs" Padding="10,4" Command="{Binding IngestPdfCommand}" />
-                                <Button Content="Manage" Padding="10,4" Margin="6,0,0,0" Click="ManagePdfButton_Click" />
+                                <Button Content="Ingest PDFs"
+                                        Style="{StaticResource AppPrimaryButton}"
+                                        Padding="10,4"
+                                        Command="{Binding IngestPdfCommand}" Width="78" />
+                                <Button Content="Manage"
+                                        Style="{StaticResource AppSecondaryButton}"
+                                        Padding="10,4"
+                                        Margin="6,0,0,0"
+                                        Click="ManagePdfButton_Click" Width="70" />
                             </StackPanel>
                         </Grid>
                         <ListBox x:Name="PdfResultsList"
