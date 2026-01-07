@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CopyHelper.Models;
 using CopyHelper.Services;
-using CopyHelper.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -23,6 +22,7 @@ namespace CopyHelper.ViewModels
         private readonly KeyboardHook _keyboardHook;
         private readonly MouseHook _mouseHook;
         private readonly OcrService _ocrService;
+        private readonly ClipEmbeddingService _clipEmbeddingService;
         private readonly PdfIndexService _pdfIndexService;
         private PdfIndexStore _pdfIndexStore;
         private readonly IAsyncRelayCommand _pasteFromClipboardCommand;
@@ -48,7 +48,8 @@ namespace CopyHelper.ViewModels
             _keyboardHook.KeyPressed += OnKeyPressed;
             _mouseHook = new MouseHook();
             _mouseHook.LeftButtonDown += OnLeftButtonDown;
-            _pdfIndexService = new PdfIndexService(AppDomain.CurrentDomain.BaseDirectory);
+            _clipEmbeddingService = new ClipEmbeddingService(AppDomain.CurrentDomain.BaseDirectory);
+            _pdfIndexService = new PdfIndexService(AppDomain.CurrentDomain.BaseDirectory, _clipEmbeddingService);
             _pdfIndexStore = _pdfIndexService.Load();
 
             Photos = new ObservableCollection<BitmapSource>();
@@ -121,6 +122,8 @@ namespace CopyHelper.ViewModels
 
         [ObservableProperty]
         private int _indexedPdfCount;
+
+        public PdfIndexService PdfIndexService => _pdfIndexService;
 
         public async Task LoadImageAsync(BitmapSource source)
         {
@@ -221,6 +224,12 @@ namespace CopyHelper.ViewModels
             }
         }
 
+        public void ReloadPdfIndex()
+        {
+            _pdfIndexStore = _pdfIndexService.Load();
+            IndexedPdfCount = _pdfIndexStore.Documents.Count;
+        }
+
         private async Task CaptureAsync()
         {
             if (CaptureProvider == null)
@@ -255,14 +264,22 @@ namespace CopyHelper.ViewModels
                 return;
             }
 
-            List<string> imageHashes = new List<string>();
+            List<float[]> imageEmbeddings = new List<float[]>();
             foreach (BitmapSource photo in photos)
             {
-                imageHashes.Add(ImageHash.ComputeDHash(photo));
+                float[] embedding = _clipEmbeddingService.EncodeImage(photo);
+                if (embedding.Length > 0)
+                {
+                    imageEmbeddings.Add(embedding);
+                }
             }
 
+            float[] textEmbedding = _clipEmbeddingService.EncodeText(ocrText);
+
+            System.Diagnostics.Debug.WriteLine($"[PDFSearch] ocrLen={ocrText.Length}, photos={photos.Count}, textEmb={textEmbedding.Length}, imageEmb={imageEmbeddings.Count}");
+
             List<SearchResult> results = await Task.Run(() =>
-                _pdfIndexService.Search(_pdfIndexStore, ocrText, imageHashes)).ConfigureAwait(true);
+                _pdfIndexService.Search(_pdfIndexStore, textEmbedding, imageEmbeddings)).ConfigureAwait(true);
 
             foreach (SearchResult result in results)
             {
@@ -456,6 +473,7 @@ namespace CopyHelper.ViewModels
             _keyboardHook.Dispose();
             _mouseHook.LeftButtonDown -= OnLeftButtonDown;
             _mouseHook.Dispose();
+            _clipEmbeddingService.Dispose();
         }
 
     }

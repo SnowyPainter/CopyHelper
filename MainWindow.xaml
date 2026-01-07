@@ -375,9 +375,15 @@
                                 <TextBlock Text="{Binding IndexedPdfCount, StringFormat=Indexed {0}}"
                                            Foreground="#636E72" Margin="0,0,8,0"/>
                                 <Button Content="Ingest PDFs" Padding="10,4" Command="{Binding IngestPdfCommand}" />
+                                <Button Content="Manage" Padding="10,4" Margin="6,0,0,0" Click="ManagePdfButton_Click" />
                             </StackPanel>
                         </Grid>
-                        <ListBox Grid.Row="1" ItemsSource="{Binding PdfSearchResults}" BorderThickness="0" Background="Transparent">
+                        <ListBox x:Name="PdfResultsList"
+                                 Grid.Row="1"
+                                 ItemsSource="{Binding PdfSearchResults}"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 MouseDoubleClick="PdfResultsList_MouseDoubleClick">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Border Background="#F8F9FA" CornerRadius="6" Margin="0,0,0,8" Padding="8">

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using CopyHelper.Models;
 using CopyHelper.ViewModels;
 using CopyHelper.Views;
 
@@ -110,6 +111,38 @@ namespace CopyHelper
             this.WindowState = this.WindowState == WindowState.Maximized
                 ? WindowState.Normal
                 : WindowState.Maximized;
+        }
+
+        private void ManagePdfButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainViewModel vm)
+            {
+                return;
+            }
+
+            PdfIndexManagerWindow window = new PdfIndexManagerWindow(new PdfIndexManagerViewModel(vm.PdfIndexService))
+            {
+                Owner = this
+            };
+            window.ShowDialog();
+            vm.ReloadPdfIndex();
+        }
+
+        private void PdfResultsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (DataContext is not MainViewModel vm)
+            {
+                return;
+            }
+
+            if (PdfResultsList.SelectedItem is SearchResult result)
+            {
+                PdfViewerWindow window = new PdfViewerWindow(result.PdfPath, result.PageNumber, result.Highlights)
+                {
+                    Owner = this
+                };
+                window.Show();
+            }
         }
     }
 }

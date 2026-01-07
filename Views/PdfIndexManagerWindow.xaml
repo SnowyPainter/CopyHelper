@@ -1,0 +1,36 @@
+<Window x:Class="CopyHelper.Views.PdfIndexManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PDF Index Manager"
+        Height="520"
+        Width="700"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,10">
+            <Button Content="Add PDFs" Width="100" Margin="0,0,8,0" Command="{Binding AddCommand}" />
+            <Button Content="Reindex" Width="100" Margin="0,0,8,0" Command="{Binding ReindexCommand}" />
+            <Button Content="Remove" Width="100" Command="{Binding RemoveCommand}" />
+        </StackPanel>
+
+        <ListBox Grid.Row="1" ItemsSource="{Binding Documents}" SelectedItem="{Binding SelectedDocument}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border BorderBrush="#E0E0E0" BorderThickness="1" Padding="8" Margin="0,0,0,8">
+                        <StackPanel>
+                            <TextBlock Text="{Binding PdfPath}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding LastWriteUtc, StringFormat=Last Updated: {0:u}}" FontSize="11" Foreground="#666" />
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <Button Grid.Row="2" Content="Close" Width="90" HorizontalAlignment="Right" Margin="0,10,0,0" Click="Close_Click" />
+    </Grid>
+</Window>

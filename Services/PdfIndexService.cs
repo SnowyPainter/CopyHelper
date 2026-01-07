@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Tasks;
 using CopyHelper.Models;
@@ -14,9 +15,11 @@ namespace CopyHelper.Services
     public sealed class PdfIndexService
     {
         private readonly string _indexPath;
+        private readonly ClipEmbeddingService _embeddingService;
 
-        public PdfIndexService(string baseDirectory)
+        public PdfIndexService(string baseDirectory, ClipEmbeddingService embeddingService)
         {
+            _embeddingService = embeddingService;
             string dataDir = Path.Combine(baseDirectory, "data");
             Directory.CreateDirectory(dataDir);
             _indexPath = Path.Combine(dataDir, "pdf_index.json");
@@ -72,56 +75,115 @@ namespace CopyHelper.Services
             return store;
         }
 
-        public List<SearchResult> Search(PdfIndexStore store, string queryText, IReadOnlyList<string> imageHashes, int topN = 8)
+        public List<SearchResult> Search(PdfIndexStore store, float[] queryTextEmbedding, IReadOnlyList<float[]> queryImageEmbeddings, int topN = 8)
         {
-            List<string> queryTokens = Tokenize(queryText).ToList();
-            HashSet<string> querySet = new HashSet<string>(queryTokens);
+            int totalPages = store.Documents.Sum(d => d.Pages.Count);
+            Debug.WriteLine($"[PDFSearch] docs={store.Documents.Count}, pages={totalPages}, textEmb={queryTextEmbedding.Length}, imageEmb={queryImageEmbeddings.Count}");
 
             List<SearchResult> results = new List<SearchResult>();
+            int scoredPages = 0;
+            double maxScore = double.NegativeInfinity;
             foreach (PdfDocumentIndex doc in store.Documents)
             {
                 foreach (PdfPageIndex page in doc.Pages)
                 {
-                    double textScore = 0;
-                    if (querySet.Count > 0 && page.Tokens.Length > 0)
-                    {
-                        int overlap = page.Tokens.Count(querySet.Contains);
-                        double denom = Math.Sqrt(querySet.Count * page.Tokens.Length);
-                        textScore = denom > 0 ? overlap / denom : 0;
-                    }
-
-                    double imageScore = 0;
-                    if (imageHashes.Count > 0 && page.ImageHashes.Count > 0)
-                    {
-                        foreach (string pageHash in page.ImageHashes)
-                        {
-                            foreach (string queryHash in imageHashes)
-                            {
-                                double sim = ImageHash.Similarity(pageHash, queryHash);
-                                if (sim > imageScore)
-                                {
-                                    imageScore = sim;
-                                }
-                            }
-                        }
-                    }
-
-                    double score = CombineScores(textScore, imageScore, querySet.Count > 0, imageHashes.Count > 0);
-                    if (score <= 0)
+                    if (page.TextChunks.Count == 0 && page.ImageChunks.Count == 0)
                     {
                         continue;
                     }
 
+                    List<PdfHighlight> highlights = new List<PdfHighlight>();
+                    double textScore = 0;
                     string snippet = page.Text;
+
+                    if (queryTextEmbedding.Length > 0 && page.TextChunks.Count > 0)
+                    {
+                        List<(TextChunk chunk, double score)> scored = new List<(TextChunk, double)>();
+                        foreach (TextChunk chunk in page.TextChunks)
+                        {
+                            if (chunk.Embedding == null || chunk.Embedding.Length == 0)
+                            {
+                                continue;
+                            }
+
+                            double sim = Cosine(queryTextEmbedding, chunk.Embedding);
+                            scored.Add((chunk, sim));
+                        }
+
+                        if (scored.Count > 0)
+                        {
+                            textScore = scored.Max(s => s.score);
+                        }
+
+                        foreach (var match in scored.OrderByDescending(s => s.score).Take(3))
+                        {
+                            if (textScore < match.score)
+                            {
+                                textScore = match.score;
+                                snippet = match.chunk.Text;
+                            }
+
+                            if (match.score >= 0.2)
+                            {
+                                highlights.Add(new PdfHighlight(match.chunk.Bounds, "text"));
+                            }
+                        }
+                    }
+
+                    double imageScore = 0;
+                    if (queryImageEmbeddings.Count > 0 && page.ImageChunks.Count > 0)
+                    {
+                        List<(ImageChunk chunk, double score)> scored = new List<(ImageChunk, double)>();
+                        foreach (ImageChunk chunk in page.ImageChunks)
+                        {
+                            if (chunk.Embedding == null || chunk.Embedding.Length == 0)
+                            {
+                                continue;
+                            }
+
+                            foreach (float[] queryEmbedding in queryImageEmbeddings)
+                            {
+                                double sim = Cosine(queryEmbedding, chunk.Embedding);
+                                scored.Add((chunk, sim));
+                            }
+                        }
+
+                        if (scored.Count > 0)
+                        {
+                            imageScore = scored.Max(s => s.score);
+                        }
+
+                        foreach (var match in scored.OrderByDescending(s => s.score).Take(2))
+                        {
+                            if (imageScore < match.score)
+                            {
+                                imageScore = match.score;
+                            }
+
+                            if (match.score >= 0.2)
+                            {
+                                highlights.Add(new PdfHighlight(match.chunk.Bounds, "image"));
+                            }
+                        }
+                    }
+
+                    double score = CombineScores(textScore, imageScore, queryTextEmbedding.Length > 0, queryImageEmbeddings.Count > 0);
+                    scoredPages++;
+                    if (score > maxScore)
+                    {
+                        maxScore = score;
+                    }
+
                     if (snippet.Length > 180)
                     {
                         snippet = snippet.Substring(0, 180) + "...";
                     }
 
-                    results.Add(new SearchResult(doc.PdfPath, page.PageNumber, score, snippet));
+                    results.Add(new SearchResult(doc.PdfPath, page.PageNumber, score, snippet, highlights));
                 }
             }
 
+            Debug.WriteLine($"[PDFSearch] scoredPages={scoredPages}, maxScore={maxScore:0.0000}, results={results.Count}");
             return results
                 .OrderByDescending(r => r.Score)
                 .Take(topN)
@@ -148,7 +210,7 @@ namespace CopyHelper.Services
             return 0;
         }
 
-        private static PdfDocumentIndex BuildIndex(string path, DateTime lastWrite)
+        private PdfDocumentIndex BuildIndex(string path, DateTime lastWrite)
         {
             PdfDocumentIndex index = new PdfDocumentIndex
             {
@@ -159,12 +221,25 @@ namespace CopyHelper.Services
             using PdfDocument document = PdfDocument.Open(path);
             foreach (Page page in document.GetPages())
             {
+                double pageWidth = page.Width;
+                double pageHeight = page.Height;
                 PdfPageIndex pageIndex = new PdfPageIndex
                 {
                     PageNumber = page.Number,
                     Text = page.Text ?? string.Empty,
-                    Tokens = Tokenize(page.Text ?? string.Empty).ToArray()
+                    PageWidth = (float)pageWidth,
+                    PageHeight = (float)pageHeight
                 };
+
+                foreach (TextChunk chunk in ExtractTextChunks(page, pageWidth, pageHeight))
+                {
+                    if (!string.IsNullOrWhiteSpace(chunk.Text))
+                    {
+                        chunk.Embedding = _embeddingService.EncodeText(chunk.Text);
+                    }
+
+                    pageIndex.TextChunks.Add(chunk);
+                }
 
                 foreach (IPdfImage image in page.GetImages())
                 {
@@ -179,8 +254,18 @@ namespace CopyHelper.Services
                         continue;
                     }
 
-                    string hash = ImageHash.ComputeDHash(bitmap);
-                    pageIndex.ImageHashes.Add(hash);
+                    float[] embedding = _embeddingService.EncodeImage(bitmap);
+                    if (embedding.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    PdfRect bounds = GetNormalizedRect(image.Bounds, pageWidth, pageHeight);
+                    pageIndex.ImageChunks.Add(new ImageChunk
+                    {
+                        Bounds = bounds,
+                        Embedding = embedding
+                    });
                 }
 
                 index.Pages.Add(pageIndex);
@@ -189,37 +274,99 @@ namespace CopyHelper.Services
             return index;
         }
 
-        private static IEnumerable<string> Tokenize(string? text)
+        private static IEnumerable<TextChunk> ExtractTextChunks(Page page, double pageWidth, double pageHeight)
         {
-            List<string> tokens = new List<string>();
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return tokens;
-            }
+            List<Word> words = page.GetWords()
+                .OrderByDescending(w => w.BoundingBox.Bottom)
+                .ThenBy(w => w.BoundingBox.Left)
+                .ToList();
 
-            System.Text.StringBuilder builder = new System.Text.StringBuilder();
-            foreach (char ch in text)
+            const double lineTolerance = 2.5;
+            List<Word> line = new List<Word>();
+            double currentY = double.NaN;
+
+            foreach (Word word in words)
             {
-                if (char.IsLetterOrDigit(ch))
+                double y = word.BoundingBox.Bottom;
+                if (line.Count == 0)
                 {
-                    builder.Append(char.ToLowerInvariant(ch));
+                    line.Add(word);
+                    currentY = y;
+                    continue;
+                }
+
+                if (Math.Abs(y - currentY) <= lineTolerance)
+                {
+                    line.Add(word);
                 }
                 else
                 {
-                    if (builder.Length > 1)
-                    {
-                        tokens.Add(builder.ToString());
-                    }
-                    builder.Clear();
+                    yield return BuildChunk(line, pageWidth, pageHeight);
+                    line.Clear();
+                    line.Add(word);
+                    currentY = y;
                 }
             }
 
-            if (builder.Length > 1)
+            if (line.Count > 0)
             {
-                tokens.Add(builder.ToString());
+                yield return BuildChunk(line, pageWidth, pageHeight);
+            }
+        }
+
+        private static TextChunk BuildChunk(List<Word> words, double pageWidth, double pageHeight)
+        {
+            string text = string.Join(" ", words.Select(w => w.Text));
+            double left = words.Min(w => w.BoundingBox.Left);
+            double right = words.Max(w => w.BoundingBox.Right);
+            double bottom = words.Min(w => w.BoundingBox.Bottom);
+            double top = words.Max(w => w.BoundingBox.Top);
+
+            PdfRect bounds = GetNormalizedRect(new { Left = left, Bottom = bottom, Width = right - left, Height = top - bottom }, pageWidth, pageHeight);
+            return new TextChunk
+            {
+                Text = text,
+                Bounds = bounds
+            };
+        }
+
+        private static PdfRect GetNormalizedRect(object rectObject, double pageWidth, double pageHeight)
+        {
+            dynamic rect = rectObject;
+            double left = rect.Left;
+            double bottom = rect.Bottom;
+            double width = rect.Width;
+            double height = rect.Height;
+
+            double x = left / pageWidth;
+            double yTop = pageHeight - (bottom + height);
+            double y = yTop / pageHeight;
+            double w = width / pageWidth;
+            double h = height / pageHeight;
+
+            return new PdfRect
+            {
+                X = (float)x,
+                Y = (float)y,
+                Width = (float)w,
+                Height = (float)h
+            };
+        }
+
+        private static double Cosine(float[] a, float[] b)
+        {
+            if (a.Length == 0 || b.Length == 0 || a.Length != b.Length)
+            {
+                return 0;
             }
 
-            return tokens;
+            double sum = 0;
+            for (int i = 0; i < a.Length; i++)
+            {
+                sum += a[i] * b[i];
+            }
+
+            return sum;
         }
     }
 }
