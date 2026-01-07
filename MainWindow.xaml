@@ -150,8 +150,9 @@
 
             <Grid Grid.Row="1" Margin="12,0,12,12">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="400" />
+                    <ColumnDefinition Width="380" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="360" />
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Column="0" Style="{StaticResource CardBorder}">
@@ -207,7 +208,7 @@
 
                 <Grid Grid.Column="1" Margin="6,0,0,0">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="1.5*" />
+                        <RowDefinition Height="1.7*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="1*" />
                     </Grid.RowDefinitions>
@@ -220,7 +221,7 @@
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                                         Visibility="{Binding SourceImage, Converter={StaticResource NullToVisible}}">
                                 <TextBlock Text="+" FontSize="40" Foreground="#DCDDE1" HorizontalAlignment="Center"/>
-                                <Button Content="Drag and drop image or Paste"
+                                <Button Content="Click to capture or drag image"
                                         Background="Transparent"
                                         BorderThickness="0"
                                         Foreground="#B2BEC3"
@@ -230,12 +231,12 @@
                                         Command="{Binding CaptureCommand}" />
                             </StackPanel>
                             <Button Command="{Binding ClearCommand}"
-        Visibility="{Binding SourceImage, Converter={StaticResource NotNullToVisible}}"
-        HorizontalAlignment="Right" 
-        VerticalAlignment="Top"
-        Margin="0,10,10,0"
-        Width="32" 
-        Height="32">
+                                    Visibility="{Binding SourceImage, Converter={StaticResource NotNullToVisible}}"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Margin="0,10,10,0"
+                                    Width="32"
+                                    Height="32">
                                 <Button.Style>
                                     <Style TargetType="Button">
                                         <Setter Property="Background" Value="#CCFF4757"/>
@@ -246,17 +247,17 @@
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="Button">
                                                     <Grid>
-                                                        <Border x:Name="border" 
-                                    Background="{TemplateBinding Background}" 
-                                    CornerRadius="16"
-                                    RenderTransformOrigin="0.5,0.5">
+                                                        <Border x:Name="border"
+                                                                Background="{TemplateBinding Background}"
+                                                                CornerRadius="16"
+                                                                RenderTransformOrigin="0.5,0.5">
                                                             <Border.RenderTransform>
                                                                 <ScaleTransform ScaleX="1" ScaleY="1"/>
                                                             </Border.RenderTransform>
-                                                            <TextBlock Text="&#xE8BB;" 
-                                           FontFamily="Segoe MDL2 Assets"
-                                           VerticalAlignment="Center" 
-                                           HorizontalAlignment="Center"/>
+                                                            <TextBlock Text="&#xE8BB;"
+                                                                       FontFamily="Segoe MDL2 Assets"
+                                                                       VerticalAlignment="Center"
+                                                                       HorizontalAlignment="Center"/>
                                                         </Border>
                                                     </Grid>
                                                     <ControlTemplate.Triggers>
@@ -264,14 +265,14 @@
                                                             <BeginStoryboard>
                                                                 <Storyboard>
                                                                     <ColorAnimation Storyboard.TargetName="border"
-                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#FF4757" Duration="0:0:0.2"/>
+                                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                                    To="#FF4757" Duration="0:0:0.2"/>
                                                                     <DoubleAnimation Storyboard.TargetName="border"
-                                                         Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
-                                                         To="1.1" Duration="0:0:0.2"/>
+                                                                                     Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
+                                                                                     To="1.1" Duration="0:0:0.2"/>
                                                                     <DoubleAnimation Storyboard.TargetName="border"
-                                                         Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
-                                                         To="1.1" Duration="0:0:0.2"/>
+                                                                                     Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                                                     To="1.1" Duration="0:0:0.2"/>
                                                                 </Storyboard>
                                                             </BeginStoryboard>
                                                         </EventTrigger>
@@ -279,14 +280,14 @@
                                                             <BeginStoryboard>
                                                                 <Storyboard>
                                                                     <ColorAnimation Storyboard.TargetName="border"
-                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#CCFF4757" Duration="0:0:0.2"/>
+                                                                                    Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                                                    To="#CCFF4757" Duration="0:0:0.2"/>
                                                                     <DoubleAnimation Storyboard.TargetName="border"
-                                                         Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
-                                                         To="1.0" Duration="0:0:0.2"/>
+                                                                                     Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
+                                                                                     To="1.0" Duration="0:0:0.2"/>
                                                                     <DoubleAnimation Storyboard.TargetName="border"
-                                                         Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
-                                                         To="1.0" Duration="0:0:0.2"/>
+                                                                                     Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                                                     To="1.0" Duration="0:0:0.2"/>
                                                                 </Storyboard>
                                                             </BeginStoryboard>
                                                         </EventTrigger>
@@ -357,6 +358,41 @@
                         </Grid>
                     </Border>
                 </Grid>
+
+                <Border Grid.Column="2" Style="{StaticResource CardBorder}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="PDF Search Results" FontWeight="SemiBold" Foreground="#2D3436" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding IndexedPdfCount, StringFormat=Indexed {0}}"
+                                           Foreground="#636E72" Margin="0,0,8,0"/>
+                                <Button Content="Ingest PDFs" Padding="10,4" Command="{Binding IngestPdfCommand}" />
+                            </StackPanel>
+                        </Grid>
+                        <ListBox Grid.Row="1" ItemsSource="{Binding PdfSearchResults}" BorderThickness="0" Background="Transparent">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#F8F9FA" CornerRadius="6" Margin="0,0,0,8" Padding="8">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding PdfPath}" FontWeight="SemiBold" Foreground="#2D3436"/>
+                                            <TextBlock Text="{Binding PageNumber, StringFormat=Page {0}}"
+                                                       Foreground="#636E72" FontSize="11" Margin="0,2,0,4"/>
+                                            <TextBlock Text="{Binding Snippet}" TextWrapping="Wrap" Foreground="#2D3436"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
             </Grid>
         </Grid>
     </Border>

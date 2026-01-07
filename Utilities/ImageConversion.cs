@@ -163,6 +163,18 @@ namespace CopyHelper.Utilities
             return bitmap;
         }
 
+        public static BitmapSource FromEncodedBytes(byte[] bytes)
+        {
+            using System.IO.MemoryStream stream = new System.IO.MemoryStream(bytes);
+            BitmapImage image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.StreamSource = stream;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+
         public static Bitmap ToBitmap(Mat mat)
         {
             if (mat.Empty())

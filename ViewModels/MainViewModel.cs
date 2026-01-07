@@ -2,7 +2,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CopyHelper.Models;
 using CopyHelper.Services;
+using CopyHelper.Utilities;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading;
@@ -21,9 +23,12 @@ namespace CopyHelper.ViewModels
         private readonly KeyboardHook _keyboardHook;
         private readonly MouseHook _mouseHook;
         private readonly OcrService _ocrService;
+        private readonly PdfIndexService _pdfIndexService;
+        private PdfIndexStore _pdfIndexStore;
         private readonly IAsyncRelayCommand _pasteFromClipboardCommand;
         private readonly IAsyncRelayCommand _openFileCommand;
         private readonly IAsyncRelayCommand _captureCommand;
+        private readonly IAsyncRelayCommand _ingestPdfCommand;
         private readonly IRelayCommand _clearCommand;
         private readonly IAsyncRelayCommand _startTypingCommand;
         private readonly IRelayCommand _stopTypingCommand;
@@ -43,22 +48,27 @@ namespace CopyHelper.ViewModels
             _keyboardHook.KeyPressed += OnKeyPressed;
             _mouseHook = new MouseHook();
             _mouseHook.LeftButtonDown += OnLeftButtonDown;
+            _pdfIndexService = new PdfIndexService(AppDomain.CurrentDomain.BaseDirectory);
+            _pdfIndexStore = _pdfIndexService.Load();
 
             Photos = new ObservableCollection<BitmapSource>();
-            Photos.CollectionChanged += (_, _) => _saveAllPhotosCommand.NotifyCanExecuteChanged();
+            PdfSearchResults = new ObservableCollection<SearchResult>();
             StatusText = "Ready.";
             TypingDelayMs = 20;
             CountdownSeconds = 3;
+            IndexedPdfCount = _pdfIndexStore.Documents.Count;
 
             _pasteFromClipboardCommand = new AsyncRelayCommand(PasteFromClipboardAsync, () => !IsBusy);
             _openFileCommand = new AsyncRelayCommand(OpenFileAsync, () => !IsBusy);
             _captureCommand = new AsyncRelayCommand(CaptureAsync, () => !IsBusy && CaptureProvider != null);
+            _ingestPdfCommand = new AsyncRelayCommand(IngestPdfsAsync, () => !IsBusy);
             _clearCommand = new RelayCommand(Clear);
             _startTypingCommand = new AsyncRelayCommand(StartTypingAsync, () => !IsBusy);
             _stopTypingCommand = new RelayCommand(StopTyping);
             _copyPhotoCommand = new RelayCommand<BitmapSource>(CopyPhoto);
             _savePhotoCommand = new RelayCommand<BitmapSource>(SavePhoto);
             _saveAllPhotosCommand = new RelayCommand(SaveAllPhotos, () => Photos.Count > 0);
+            Photos.CollectionChanged += (_, _) => _saveAllPhotosCommand.NotifyCanExecuteChanged();
         }
 
         public ObservableCollection<BitmapSource> Photos { get; }
@@ -99,12 +109,18 @@ namespace CopyHelper.ViewModels
         public IAsyncRelayCommand PasteFromClipboardCommand => _pasteFromClipboardCommand;
         public IAsyncRelayCommand OpenFileCommand => _openFileCommand;
         public IAsyncRelayCommand CaptureCommand => _captureCommand;
+        public IAsyncRelayCommand IngestPdfCommand => _ingestPdfCommand;
         public IRelayCommand ClearCommand => _clearCommand;
         public IAsyncRelayCommand StartTypingCommand => _startTypingCommand;
         public IRelayCommand StopTypingCommand => _stopTypingCommand;
         public IRelayCommand<BitmapSource> CopyPhotoCommand => _copyPhotoCommand;
         public IRelayCommand<BitmapSource> SavePhotoCommand => _savePhotoCommand;
         public IRelayCommand SaveAllPhotosCommand => _saveAllPhotosCommand;
+
+        public ObservableCollection<SearchResult> PdfSearchResults { get; }
+
+        [ObservableProperty]
+        private int _indexedPdfCount;
 
         public async Task LoadImageAsync(BitmapSource source)
         {
@@ -127,6 +143,8 @@ namespace CopyHelper.ViewModels
             StatusText = "Processing complete.";
             IsBusy = false;
             _saveAllPhotosCommand.NotifyCanExecuteChanged();
+
+            await RunPdfSearchAsync(result.OcrText, result.Photos).ConfigureAwait(true);
         }
 
         partial void OnIsBusyChanged(bool value)
@@ -134,6 +152,7 @@ namespace CopyHelper.ViewModels
             _pasteFromClipboardCommand.NotifyCanExecuteChanged();
             _openFileCommand.NotifyCanExecuteChanged();
             _captureCommand.NotifyCanExecuteChanged();
+            _ingestPdfCommand.NotifyCanExecuteChanged();
             _startTypingCommand.NotifyCanExecuteChanged();
         }
 
@@ -182,6 +201,26 @@ namespace CopyHelper.ViewModels
             }
         }
 
+        private async Task IngestPdfsAsync()
+        {
+            Microsoft.Win32.OpenFileDialog dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "PDF Files|*.pdf|All Files|*.*",
+                Multiselect = true
+            };
+
+            bool? result = dialog.ShowDialog();
+            if (result == true && dialog.FileNames.Length > 0)
+            {
+                StatusText = "Indexing PDFs...";
+                IsBusy = true;
+                _pdfIndexStore = await _pdfIndexService.IngestAsync(dialog.FileNames, _pdfIndexStore).ConfigureAwait(true);
+                IndexedPdfCount = _pdfIndexStore.Documents.Count;
+                StatusText = $"Indexed {IndexedPdfCount} PDF(s).";
+                IsBusy = false;
+            }
+        }
+
         private async Task CaptureAsync()
         {
             if (CaptureProvider == null)
@@ -205,6 +244,30 @@ namespace CopyHelper.ViewModels
             AnswerText = string.Empty;
             StatusText = "Cleared.";
             _saveAllPhotosCommand.NotifyCanExecuteChanged();
+            PdfSearchResults.Clear();
+        }
+
+        private async Task RunPdfSearchAsync(string ocrText, IReadOnlyList<BitmapSource> photos)
+        {
+            PdfSearchResults.Clear();
+            if (_pdfIndexStore.Documents.Count == 0)
+            {
+                return;
+            }
+
+            List<string> imageHashes = new List<string>();
+            foreach (BitmapSource photo in photos)
+            {
+                imageHashes.Add(ImageHash.ComputeDHash(photo));
+            }
+
+            List<SearchResult> results = await Task.Run(() =>
+                _pdfIndexService.Search(_pdfIndexStore, ocrText, imageHashes)).ConfigureAwait(true);
+
+            foreach (SearchResult result in results)
+            {
+                PdfSearchResults.Add(result);
+            }
         }
 
         private async Task StartTypingAsync()
