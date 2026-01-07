@@ -207,23 +207,12 @@
 
                 <Grid Grid.Column="1" Margin="6,0,0,0">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="1.5*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="1*" />
                     </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" Style="{StaticResource CardBorder}" Padding="8" Margin="6,6,6,12">
-                        <StackPanel Orientation="Horizontal">
-                            <Button Content="Paste (Ctrl+V)" Margin="0,0,8,0" Width="110" Command="{Binding PasteFromClipboardCommand}" />
-                            <Button Content="Open File" Margin="0,0,8,0" Width="100" Command="{Binding OpenFileCommand}" />
-                            <Button Content="Capture" Margin="0,0,8,0" Width="100" Command="{Binding CaptureCommand}" />
-                            <Separator Margin="8,0"/>
-                            <Button Content="Clear All" Foreground="#D63031" Width="100" Command="{Binding ClearCommand}" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Row="1" Style="{StaticResource CardBorder}" Margin="6,0,6,12" Background="#FAFAFA">
+                    <Border Grid.Row="0" Style="{StaticResource CardBorder}" Margin="6,0,6,12" Background="#FAFAFA">
                         <Grid x:Name="DropArea" AllowDrop="True" PreviewDragOver="DropArea_PreviewDragOver" Drop="DropArea_Drop">
                             <Rectangle Stroke="#DCDDE1" StrokeThickness="2" StrokeDashArray="4 2" RadiusX="8" RadiusY="8"/>
                             <Image Source="{Binding SourceImage}" Stretch="Uniform" Margin="10"
@@ -231,12 +220,87 @@
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                                         Visibility="{Binding SourceImage, Converter={StaticResource NullToVisible}}">
                                 <TextBlock Text="+" FontSize="40" Foreground="#DCDDE1" HorizontalAlignment="Center"/>
-                                <TextBlock Text="Drag and drop image or Paste" Foreground="#B2BEC3" FontSize="16"/>
+                                <Button Content="Drag and drop image or Paste"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Foreground="#B2BEC3"
+                                        FontSize="16"
+                                        Padding="0"
+                                        Cursor="Hand"
+                                        Command="{Binding CaptureCommand}" />
                             </StackPanel>
+                            <Button Command="{Binding ClearCommand}"
+        Visibility="{Binding SourceImage, Converter={StaticResource NotNullToVisible}}"
+        HorizontalAlignment="Right" 
+        VerticalAlignment="Top"
+        Margin="0,10,10,0"
+        Width="32" 
+        Height="32">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="#CCFF4757"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="FontSize" Value="12"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Grid>
+                                                        <Border x:Name="border" 
+                                    Background="{TemplateBinding Background}" 
+                                    CornerRadius="16"
+                                    RenderTransformOrigin="0.5,0.5">
+                                                            <Border.RenderTransform>
+                                                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                                            </Border.RenderTransform>
+                                                            <TextBlock Text="&#xE8BB;" 
+                                           FontFamily="Segoe MDL2 Assets"
+                                           VerticalAlignment="Center" 
+                                           HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                    </Grid>
+                                                    <ControlTemplate.Triggers>
+                                                        <EventTrigger RoutedEvent="MouseEnter">
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <ColorAnimation Storyboard.TargetName="border"
+                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                        To="#FF4757" Duration="0:0:0.2"/>
+                                                                    <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
+                                                         To="1.1" Duration="0:0:0.2"/>
+                                                                    <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         To="1.1" Duration="0:0:0.2"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                        <EventTrigger RoutedEvent="MouseLeave">
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <ColorAnimation Storyboard.TargetName="border"
+                                                        Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                        To="#CCFF4757" Duration="0:0:0.2"/>
+                                                                    <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)"
+                                                         To="1.0" Duration="0:0:0.2"/>
+                                                                    <DoubleAnimation Storyboard.TargetName="border"
+                                                         Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         To="1.0" Duration="0:0:0.2"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </Grid>
                     </Border>
 
-                    <StackPanel Grid.Row="2" Margin="10,0,10,8">
+                    <StackPanel Grid.Row="1" Margin="10,0,10,8">
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -280,7 +344,7 @@
                         </ScrollViewer>
                     </StackPanel>
 
-                    <Border Grid.Row="3" Style="{StaticResource CardBorder}">
+                    <Border Grid.Row="2" Style="{StaticResource CardBorder}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
