@@ -21,7 +21,6 @@ namespace CopyHelper.Models
         public float PageWidth { get; set; }
         public float PageHeight { get; set; }
         public string Text { get; set; } = string.Empty;
-        public float[]? TextEmbedding { get; set; }
         public List<TextChunk> TextChunks { get; set; } = new();
         public List<ImageChunk> ImageChunks { get; set; } = new();
     }
@@ -30,7 +29,7 @@ namespace CopyHelper.Models
     {
         public string Text { get; set; } = string.Empty;
         public PdfRect Bounds { get; set; } = new PdfRect();
-        public float[]? Embedding { get; set; }
+        public string[] Ngrams { get; set; } = Array.Empty<string>();
     }
 
     public sealed class ImageChunk

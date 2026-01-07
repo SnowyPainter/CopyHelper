@@ -274,12 +274,10 @@ namespace CopyHelper.ViewModels
                 }
             }
 
-            float[] textEmbedding = _clipEmbeddingService.EncodeText(ocrText);
-
-            System.Diagnostics.Debug.WriteLine($"[PDFSearch] ocrLen={ocrText.Length}, photos={photos.Count}, textEmb={textEmbedding.Length}, imageEmb={imageEmbeddings.Count}");
+            System.Diagnostics.Debug.WriteLine($"[PDFSearch] ocrLen={ocrText.Length}, photos={photos.Count}, imageEmb={imageEmbeddings.Count}");
 
             List<SearchResult> results = await Task.Run(() =>
-                _pdfIndexService.Search(_pdfIndexStore, textEmbedding, imageEmbeddings)).ConfigureAwait(true);
+                _pdfIndexService.Search(_pdfIndexStore, ocrText, imageEmbeddings)).ConfigureAwait(true);
 
             foreach (SearchResult result in results)
             {

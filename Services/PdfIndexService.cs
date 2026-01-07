@@ -75,10 +75,11 @@ namespace CopyHelper.Services
             return store;
         }
 
-        public List<SearchResult> Search(PdfIndexStore store, float[] queryTextEmbedding, IReadOnlyList<float[]> queryImageEmbeddings, int topN = 8)
+        public List<SearchResult> Search(PdfIndexStore store, string queryText, IReadOnlyList<float[]> queryImageEmbeddings, int topN = 8)
         {
             int totalPages = store.Documents.Sum(d => d.Pages.Count);
-            Debug.WriteLine($"[PDFSearch] docs={store.Documents.Count}, pages={totalPages}, textEmb={queryTextEmbedding.Length}, imageEmb={queryImageEmbeddings.Count}");
+            string[] queryNgrams = BuildNgrams(queryText);
+            Debug.WriteLine($"[PDFSearch] docs={store.Documents.Count}, pages={totalPages}, qTextLen={queryText.Length}, qNgrams={queryNgrams.Length}, imageEmb={queryImageEmbeddings.Count}");
 
             List<SearchResult> results = new List<SearchResult>();
             int scoredPages = 0;
@@ -96,17 +97,17 @@ namespace CopyHelper.Services
                     double textScore = 0;
                     string snippet = page.Text;
 
-                    if (queryTextEmbedding.Length > 0 && page.TextChunks.Count > 0)
+                    if (queryNgrams.Length > 0 && page.TextChunks.Count > 0)
                     {
                         List<(TextChunk chunk, double score)> scored = new List<(TextChunk, double)>();
                         foreach (TextChunk chunk in page.TextChunks)
                         {
-                            if (chunk.Embedding == null || chunk.Embedding.Length == 0)
+                            if (chunk.Ngrams.Length == 0)
                             {
                                 continue;
                             }
 
-                            double sim = Cosine(queryTextEmbedding, chunk.Embedding);
+                            double sim = TextSimilarity(queryText, queryNgrams, chunk.Text, chunk.Ngrams);
                             scored.Add((chunk, sim));
                         }
 
@@ -167,7 +168,7 @@ namespace CopyHelper.Services
                         }
                     }
 
-                    double score = CombineScores(textScore, imageScore, queryTextEmbedding.Length > 0, queryImageEmbeddings.Count > 0);
+                    double score = CombineScores(textScore, imageScore, queryNgrams.Length > 0, queryImageEmbeddings.Count > 0);
                     scoredPages++;
                     if (score > maxScore)
                     {
@@ -235,7 +236,7 @@ namespace CopyHelper.Services
                 {
                     if (!string.IsNullOrWhiteSpace(chunk.Text))
                     {
-                        chunk.Embedding = _embeddingService.EncodeText(chunk.Text);
+                        chunk.Ngrams = BuildNgrams(chunk.Text);
                     }
 
                     pageIndex.TextChunks.Add(chunk);
@@ -351,6 +352,106 @@ namespace CopyHelper.Services
                 Width = (float)w,
                 Height = (float)h
             };
+        }
+
+        private static string[] BuildNgrams(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return Array.Empty<string>();
+            }
+
+            string normalized = Normalize(text);
+            if (normalized.Length < 3)
+            {
+                return new[] { normalized };
+            }
+
+            List<string> grams = new List<string>();
+            for (int i = 0; i <= normalized.Length - 3; i++)
+            {
+                grams.Add(normalized.Substring(i, 3));
+            }
+
+            return grams.Distinct().ToArray();
+        }
+
+        private static double TextSimilarity(string queryText, string[] queryNgrams, string chunkText, string[] chunkNgrams)
+        {
+            if (queryNgrams.Length == 0 || chunkNgrams.Length == 0)
+            {
+                return 0;
+            }
+
+            double jaccard = Jaccard(queryNgrams, chunkNgrams);
+            double fuzzy = FuzzyRatio(queryText, chunkText);
+            return jaccard * 0.7 + fuzzy * 0.3;
+        }
+
+        private static double Jaccard(string[] a, string[] b)
+        {
+            if (a.Length == 0 || b.Length == 0)
+            {
+                return 0;
+            }
+
+            HashSet<string> set = new HashSet<string>(a);
+            int intersection = b.Count(set.Contains);
+            int union = set.Count + b.Length - intersection;
+            return union > 0 ? (double)intersection / union : 0;
+        }
+
+        private static double FuzzyRatio(string a, string b)
+        {
+            string sa = Normalize(a);
+            string sb = Normalize(b);
+            if (sa.Length == 0 || sb.Length == 0)
+            {
+                return 0;
+            }
+
+            int dist = Levenshtein(sa, sb);
+            int maxLen = Math.Max(sa.Length, sb.Length);
+            return maxLen > 0 ? 1.0 - (double)dist / maxLen : 0;
+        }
+
+        private static int Levenshtein(string a, string b)
+        {
+            int n = a.Length;
+            int m = b.Length;
+            int[] prev = new int[m + 1];
+            int[] curr = new int[m + 1];
+
+            for (int j = 0; j <= m; j++)
+            {
+                prev[j] = j;
+            }
+
+            for (int i = 1; i <= n; i++)
+            {
+                curr[0] = i;
+                for (int j = 1; j <= m; j++)
+                {
+                    int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                    curr[j] = Math.Min(
+                        Math.Min(curr[j - 1] + 1, prev[j] + 1),
+                        prev[j - 1] + cost);
+                }
+
+                int[] temp = prev;
+                prev = curr;
+                curr = temp;
+            }
+
+            return prev[m];
+        }
+
+        private static string Normalize(string text)
+        {
+            return new string(text
+                .Where(char.IsLetterOrDigit)
+                .Select(char.ToLowerInvariant)
+                .ToArray());
         }
 
         private static double Cosine(float[] a, float[] b)

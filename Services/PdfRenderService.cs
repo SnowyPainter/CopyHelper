@@ -1,8 +1,8 @@
 using System;
-using System.Windows.Media;
+using System.Drawing;
 using System.Windows.Media.Imaging;
-using PDFiumSharp;
-using PDFiumSharp.Enums;
+using CopyHelper.Utilities;
+using PdfiumViewer;
 
 namespace CopyHelper.Services
 {
@@ -12,38 +12,27 @@ namespace CopyHelper.Services
 
         public PdfRenderService(string pdfPath)
         {
-            _document = new PdfDocument(pdfPath);
+            _document = PdfDocument.Load(pdfPath);
         }
 
         public (BitmapSource bitmap, int width, int height) RenderPage(int pageNumber, int targetWidth)
         {
-            PdfPage page = _document.Pages[pageNumber - 1];
-            double scale = targetWidth / page.Width;
-            int width = Math.Max(1, (int)Math.Round(page.Width * scale));
-            int height = Math.Max(1, (int)Math.Round(page.Height * scale));
+            int index = pageNumber - 1;
+            var size = _document.PageSizes[index];
+            double scale = targetWidth / size.Width;
+            int width = Math.Max(1, (int)Math.Round(size.Width * scale));
+            int height = Math.Max(1, (int)Math.Round(size.Height * scale));
 
-            using PDFiumBitmap bitmap = new PDFiumBitmap(width, height, true);
-            page.Render(bitmap, PageOrientations.Normal, RenderingFlags.Annotations);
-
-            int bufferSize = bitmap.Stride * height;
-            BitmapSource source = BitmapSource.Create(
-                width,
-                height,
-                96,
-                96,
-                PixelFormats.Bgra32,
-                null,
-                bitmap.Scan0,
-                bufferSize,
-                bitmap.Stride);
-
+            using Image image = _document.Render(index, width, height, 96, 96, PdfRenderFlags.Annotations);
+            using Bitmap bitmap = new Bitmap(image);
+            BitmapSource source = ImageConversion.ToBitmapSource(bitmap);
             source.Freeze();
             return (source, width, height);
         }
 
         public void Dispose()
         {
-            _document.Close();
+            _document.Dispose();
         }
     }
 }
