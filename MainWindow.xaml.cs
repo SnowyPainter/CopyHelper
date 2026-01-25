@@ -137,7 +137,8 @@ namespace CopyHelper
 
             if (PdfResultsList.SelectedItem is SearchResult result)
             {
-                PdfViewerWindow window = new PdfViewerWindow(result.PdfPath, result.PageNumber, result.Highlights)
+                int index = vm.PdfSearchResults.IndexOf(result);
+                PdfViewerWindow window = new PdfViewerWindow(vm, vm.PdfSearchResults, index)
                 {
                     Owner = this
                 };

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -124,6 +125,21 @@ namespace CopyHelper.ViewModels
         private int _indexedPdfCount;
 
         public PdfIndexService PdfIndexService => _pdfIndexService;
+
+        public bool TryGetPdfPageText(string pdfPath, int pageNumber, out string text)
+        {
+            text = string.Empty;
+            PdfDocumentIndex? doc = _pdfIndexStore.Documents.FirstOrDefault(d =>
+                string.Equals(d.PdfPath, pdfPath, StringComparison.OrdinalIgnoreCase));
+            PdfPageIndex? page = doc?.Pages.FirstOrDefault(p => p.PageNumber == pageNumber);
+            if (page == null)
+            {
+                return false;
+            }
+
+            text = page.Text ?? string.Empty;
+            return true;
+        }
 
         public async Task LoadImageAsync(BitmapSource source)
         {
